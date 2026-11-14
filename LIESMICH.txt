@@ -1,0 +1,40 @@
+LITCHI MISSION BUILDER - so startest du die Seite
+
+Was das ist
+Ein Werkzeug, das GPS-Koordinaten aus Bildern, Screenshots und Videos liest, daraus eine Drohnenstrecke baut
+und sie als Litchi-CSV exportiert. Die Seite läuft nur auf deinem Rechner. Du brauchst keine Anmeldung,
+kein Konto und keinen Zugang zu irgendeinem Dienst. Deine Bilder und Videos werden nicht hochgeladen.
+
+Windows
+1. Das ZIP-Archiv mit Rechtsklick "Alle extrahieren..." entpacken (nicht direkt aus dem ZIP starten).
+2. Im entpackten Ordner die Datei "Start-Windows.bat" doppelt anklicken.
+3. Falls Windows warnt ("Der Computer wurde geschützt"): "Weitere Informationen" und dann "Trotzdem ausführen".
+4. Ein schwarzes Fenster öffnet sich und der Browser zeigt die Seite. Das Fenster offen lassen.
+5. Beenden: das schwarze Fenster schließen.
+
+Mac
+1. ZIP entpacken.
+2. Im entpackten Ordner "Start-Mac.command" doppelt anklicken.
+   Beim ersten Mal ggf. Rechtsklick > "Öffnen" > "Öffnen" (Gatekeeper-Warnung).
+   (Python 3 wird gebraucht. Falls das Mac danach fragt, die Installation der Entwicklerwerkzeuge bestätigen.)
+3. Ein Terminal-Fenster öffnet sich und der Browser zeigt die Seite (Port 8080, falls belegt 8081 bis 8090).
+4. Beenden: Terminal-Fenster schließen oder Ctrl+C drücken.
+
+Videos
+- Ein Video wählen oder in die Ablagefläche ziehen. Aus dem Video werden Standbilder geschnitten (Standard: alle 5 Sekunden,
+  einstellbar) und gelesen. Das dauert je Bild etwa 6 Sekunden, ein längeres Video also einige Minuten.
+- Die Koordinaten müssen im Video als Text eingeblendet sein. Das Format muss der Browser abspielen können (MP4 mit H.264).
+
+Karte
+- Rechts steht eine Karte mit deiner Route. Oben in der Karte wählst du Karte, Satellit oder Skizze.
+- Für Karte und Satellit lädt die Seite Kartenbilder von OpenStreetMap bzw. Esri aus dem Internet. Dabei sehen diese Dienste
+  den Ausschnitt, den du anschaust, und deine IP-Adresse, aber nie deine Bilder. Die Ansicht "Skizze" braucht kein Internet
+  und kontaktiert niemanden. Ohne Internet wechselt die Seite von selbst auf die Skizze.
+
+Wichtig zu wissen
+- Die Standardhöhe aus den Missionseinstellungen gilt für alle Wegpunkte ohne eigene Höhe und steht in der CSV.
+- Am besten in Chrome, Edge oder Firefox öffnen.
+- Die Texterkennung liest nur Text, der im Bild sichtbar ist. Bitte jedes Ergebnis mit dem Bild vergleichen,
+  bevor du es übernimmst: Eine falsch gelesene Ziffer wäre ein falscher Wegpunkt.
+- Missionen werden nur in deinem Browser gespeichert (nicht geteilt).
+- Wenn die Seite sich nicht öffnet: im Browser http://localhost:8080/ eingeben.
