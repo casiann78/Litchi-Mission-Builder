@@ -179,7 +179,7 @@ export async function openVideo(e) {
   n.setAttribute("webkit-playsinline", "");
   n.setAttribute("aria-hidden", "true");
   n.style.cssText =
-    "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;";
+    "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1;";
   document.body.appendChild(n);
   let dispose = () => {
     n.remove();
@@ -238,9 +238,77 @@ export async function openVideo(e) {
   }
 }
 
-async function readFrame(e, t, n, r) {
-  await seekTo(e.video, t);
-  let i = grabFrame(e.video, FRAME_MAX_SIDE),
+// Wartet, bis der Browser nach einem Sprung wirklich ein neues Bild zeigt.
+// „seeked“ allein genügt in Safari nicht: Dort zeichnet drawImage sonst noch das alte Bild.
+function waitForPresentedFrame(video, timeoutMs) {
+  return new Promise((resolve) => {
+    if (typeof video.requestVideoFrameCallback != "function") {
+      setTimeout(() => resolve(false), Math.min(timeoutMs, 120));
+      return;
+    }
+    let timer = setTimeout(() => resolve(false), timeoutMs);
+    video.requestVideoFrameCallback(() => {
+      clearTimeout(timer);
+      resolve(true);
+    });
+  });
+}
+
+// Spielt das Video einen Moment ab, damit der Browser das Bild an der aktuellen
+// Stelle sicher dekodiert, und hält es wieder an.
+async function nudgeFrame(video) {
+  let presented = waitForPresentedFrame(video, 1200);
+  try {
+    await Promise.race([
+      video.play(),
+      new Promise((resolve) => setTimeout(resolve, PRIME_TIMEOUT_MS)),
+    ]);
+  } catch {
+    // Abspielen nicht erlaubt: Es bleibt beim vorhandenen Bild.
+  }
+  await presented;
+  video.pause();
+}
+
+// Kleiner Fingerabdruck des aktuellen Videobilds. Zwei verschiedene Stellen eines
+// Videos liefern nie exakt dieselben Bytes, ein nicht aktualisiertes Bild schon.
+function frameFingerprint(video) {
+  let canvas = grabFrame(video, 160);
+  try {
+    let data = canvas
+      .getContext("2d")
+      .getImageData(0, 0, canvas.width, canvas.height).data;
+    let hash = 2166136261;
+    for (let i = 0; i < data.length; i++)
+      hash = Math.imul(hash ^ data[i], 16777619);
+    return hash >>> 0;
+  } catch {
+    return null;
+  } finally {
+    canvas.width = canvas.height = 0;
+  }
+}
+
+async function readFrame(session, time, onProgress, options) {
+  let video = session.video;
+  let presented = waitForPresentedFrame(video, 400);
+  let moved = Math.abs(video.currentTime - time) >= 0.001;
+  await seekTo(video, time);
+  if (moved) await presented;
+  // Zeigt das Video trotz Sprung exakt dasselbe Bild wie an der vorigen Stelle,
+  // hat der Browser es nicht aktualisiert (iOS-Safari): kurz anspielen und neu prüfen.
+  let fingerprint = frameFingerprint(video);
+  if (
+    fingerprint !== null &&
+    session.lastFrame &&
+    session.lastFrame.fingerprint === fingerprint &&
+    Math.abs(session.lastFrame.time - time) > 0.05
+  ) {
+    await nudgeFrame(video);
+    fingerprint = frameFingerprint(video);
+  }
+  session.lastFrame = { time, fingerprint };
+  let i = grabFrame(video, FRAME_MAX_SIDE),
     a;
   try {
     a = await canvasToJpeg(i, FRAME_JPEG_QUALITY);
@@ -248,7 +316,7 @@ async function readFrame(e, t, n, r) {
     i.width = i.height = 0;
   }
   try {
-    return await recognizeImage(a, n, r);
+    return await recognizeImage(a, onProgress, options);
   } catch (e) {
     if (e?.code === "slow") return [];
     throw e;
