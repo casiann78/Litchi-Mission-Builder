@@ -14,6 +14,7 @@ import {
   MapPinPlusIcon,
   NotePencilIcon,
   PlusIcon,
+  TrashIcon,
   UsersThreeIcon,
   WarningIcon,
 } from "@phosphor-icons/react";
@@ -266,8 +267,21 @@ export default function App() {
         index: t,
       });
     },
+    // Entfernt alle Wegpunkte auf einmal. Die Liste wird für „Rückgängig“ aufbewahrt.
+    handleRemoveAll = () => {
+      let all = waypointsRef.current;
+      if (all.length === 0) return;
+      setWaypoints([]);
+      setSelectedId(null);
+      setLastRemoved({ all });
+    },
     vt = () => {
       if (!lastRemoved) return;
+      if (lastRemoved.all) {
+        setWaypoints(lastRemoved.all);
+        setLastRemoved(null);
+        return;
+      }
       let { wp, index } = lastRemoved;
       setWaypoints((n) => {
         let r = [...n];
@@ -1035,6 +1049,18 @@ export default function App() {
               {"Wegpunkte "}
               <Odometer className="sec-count num" value={waypoints.length} />
             </h2>
+            {waypoints.length > 0 && (
+              <div className="-mt-2 mb-4">
+                <button
+                  type="button"
+                  onClick={handleRemoveAll}
+                  className="btn btn-secondary btn-sm"
+                >
+                  <TrashIcon size={15} aria-hidden="true" />
+                  Alle Wegpunkte löschen
+                </button>
+              </div>
+            )}
             <Reveal show={!!lastRemoved} className="mb-3">
               {lastRemoved && (
                 <div
@@ -1042,9 +1068,11 @@ export default function App() {
                   className="note row-enter items-center justify-between"
                 >
                   <span>
-                    {"Wegpunkt "}
-                    {lastRemoved.index + 1}
-                    {" entfernt."}
+                    {lastRemoved.all
+                      ? lastRemoved.all.length === 1
+                        ? "Der Wegpunkt wurde entfernt."
+                        : `Alle ${lastRemoved.all.length} Wegpunkte entfernt.`
+                      : `Wegpunkt ${lastRemoved.index + 1} entfernt.`}
                   </span>
                   <button onClick={vt} className="btn btn-secondary btn-sm">
                     Rückgängig
