@@ -76,6 +76,13 @@ const MAX_SPEED_MS = 55;
 
 const toleranceMeters = (e) => 30 * Math.abs(e) + 25;
 
+// Feinprüfung: ab dieser Abweichung von der Linie zwischen den Nachbarn (zusätzlich
+// zu deren Abstand) wird nach einer verwechselten Ziffer gesucht …
+const FINE_MIN_DEVIATION_M = 3;
+
+// … und so nah an der Linie muss der korrigierte Punkt mindestens liegen.
+const FINE_WINDOW_M = 1.5;
+
 const CONFUSABLE_DIGITS = new Set(
   [
     "09",
@@ -341,6 +348,7 @@ function checkAgainstTrack(e, t, n) {
             lon: n.lon + (i.lon - n.lon) * c,
           },
           span: haversineDistance(n.lat, n.lon, i.lat, i.lon),
+          twoSided: true,
         };
       }
       let s = a.length ? a : o,
@@ -360,12 +368,23 @@ function checkAgainstTrack(e, t, n) {
       let n = E(t);
       if (!n) return null;
       let { predicted, span } = n,
-        a = 2 * span + 25;
-      if (
-        haversineDistance(t.lat, t.lon, predicted.lat, predicted.lon) <=
-        a + 10
-      )
-        return null;
+        a = 2 * span + 25,
+        deviation = haversineDistance(
+          t.lat,
+          t.lon,
+          predicted.lat,
+          predicted.lon,
+        ),
+        // Feinprüfung für langsame, kleine Flüge: Der Punkt liegt deutlich neben der
+        // Linie zwischen seinen beiden Nachbarn, und eine einzige typische
+        // Ziffernverwechslung (z. B. 8 statt 0) brächte ihn genau dorthin.
+        fine = false;
+      if (deviation <= a + 10) {
+        if (!n.twoSided || deviation <= span + FINE_MIN_DEVIATION_M)
+          return null;
+        fine = true;
+        a = Math.max(FINE_WINDOW_M, 0.5 * span);
+      }
       let o = Math.max(0.05, Math.cos((e.lat * Math.PI) / 180)),
         s = a / METERS_PER_DEG,
         c = a / (METERS_PER_DEG * o),
@@ -406,7 +425,7 @@ function checkAgainstTrack(e, t, n) {
           let cost = e.cost + t.cost;
           if (
             cost === 0 ||
-            cost > 1 ||
+            cost > (fine ? 0.5 : 1) ||
             (e.atypical || 0) + (t.atypical || 0) > 0
           )
             continue;
@@ -418,6 +437,7 @@ function checkAgainstTrack(e, t, n) {
           };
           if (((i.close = d(i)), (i.support = u(i)), i.close < 1)) continue;
           let a = haversineDistance(i.lat, i.lon, predicted.lat, predicted.lon);
+          if (fine && a > deviation / 8) continue;
           (!m || a < m.d) &&
             (m = {
               ...i,
