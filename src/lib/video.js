@@ -44,6 +44,10 @@ const FRAME_BUDGET_MS = 2e4;
 
 const SEEK_TIMEOUT_MS = 15e3;
 
+const FIRST_SEEK_TIMEOUT_MS = 4e3;
+
+const PRIME_TIMEOUT_MS = 3e3;
+
 const videoError = (e) =>
   Object.assign(Error(e), {
     code: "video",
@@ -78,13 +82,58 @@ function waitForEvent(e, t, n, r) {
   });
 }
 
-async function seekTo(e, t) {
-  if (Math.abs(e.currentTime - t) < 0.001 && e.readyState >= 2) return;
-  let n = waitForEvent(e, ["seeked", "emptied", "error"], SEEK_TIMEOUT_MS, () =>
-    videoError("Das Video lässt sich an dieser Stelle nicht lesen."),
+// iOS-Safari lädt Bilddaten eines Videos erst, wenn es einmal abgespielt wurde.
+// Ein kurzes stummes Anspielen holt das nach; auf anderen Browsern schadet es nicht.
+async function primeVideo(video) {
+  try {
+    await Promise.race([
+      video.play(),
+      new Promise((resolve) => setTimeout(resolve, PRIME_TIMEOUT_MS)),
+    ]);
+  } catch {
+    // Abspielen nicht erlaubt (z. B. Stromsparmodus): Der Sprung wird trotzdem versucht.
+  }
+  video.pause();
+}
+
+// Wartet kurz darauf, dass der Browser ein Bild zum Zeichnen bereit hat.
+async function waitForFrameData(video, timeoutMs) {
+  if (video.readyState >= 2) return true;
+  await waitForEvent(video, ["loadeddata", "canplay", "error"], timeoutMs);
+  return video.readyState >= 2;
+}
+
+async function seekTo(video, time) {
+  if (Math.abs(video.currentTime - time) < 0.001 && video.readyState >= 2)
+    return;
+  // Erster Versuch mit kurzer Frist. Bleibt er hängen (iOS), wird das Video
+  // angespielt und der Sprung mit der vollen Frist wiederholt.
+  let first = waitForEvent(
+    video,
+    ["seeked", "emptied", "error"],
+    FIRST_SEEK_TIMEOUT_MS,
   );
-  if (((e.currentTime = t), (await n) !== "seeked"))
+  video.currentTime = time;
+  let result = await first;
+  if (result === "timeout") {
+    await primeVideo(video);
+    let second = waitForEvent(
+      video,
+      ["seeked", "emptied", "error"],
+      SEEK_TIMEOUT_MS,
+      () => videoError("Das Video lässt sich an dieser Stelle nicht lesen."),
+    );
+    // Kleiner Versatz, damit der Browser den Sprung sicher neu ausführt.
+    video.currentTime = Math.max(0, time - 0.001);
+    video.currentTime = time;
+    result = await second;
+  }
+  if (result !== "seeked")
     throw videoError("Das Video ist nicht mehr geöffnet.");
+  if (!(await waitForFrameData(video, 1500))) {
+    await primeVideo(video);
+    await waitForFrameData(video, 3000);
+  }
 }
 
 async function fixInfiniteDuration(e) {
@@ -123,7 +172,17 @@ export async function openVideo(e) {
   n.muted = true;
   n.playsInline = true;
   n.preload = "auto";
+  // iOS-Safari braucht die Attribute im Markup und ein Element im Dokument,
+  // sonst lädt es keine Bilder. Das Element bleibt unsichtbar.
+  n.setAttribute("muted", "");
+  n.setAttribute("playsinline", "");
+  n.setAttribute("webkit-playsinline", "");
+  n.setAttribute("aria-hidden", "true");
+  n.style.cssText =
+    "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;";
+  document.body.appendChild(n);
   let dispose = () => {
+    n.remove();
     n.removeAttribute("src");
     n.load();
     URL.revokeObjectURL(t);
@@ -154,6 +213,8 @@ export async function openVideo(e) {
       !n.videoWidth || !n.videoHeight)
     )
       throw videoError(MSG_NO_VIDEO_TRACK);
+    // Hat der Browser nach dem Öffnen noch kein Bild geladen (iOS), kurz anspielen.
+    if (!(await waitForFrameData(n, 1500))) await primeVideo(n);
     let e = n.duration;
     if (
       (Number.isFinite(e) || (e = await fixInfiniteDuration(n)),
