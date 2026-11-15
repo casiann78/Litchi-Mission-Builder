@@ -1,25 +1,23 @@
 // Öffnet Videos, schneidet Standbilder heraus und lässt sie lesen.
-import { haversineDistance } from "./geo";
 import { recognizeImage, FAST_VARIANTS } from "./ocr";
 import { createTrackFilter } from "./trackCheck";
 
-function createDuplicateFilter(e = 3) {
-  let t = [];
+// Fasst aufeinanderfolgende Bilder zusammen, die exakt dieselbe Koordinate zeigen
+// (die Drohne steht). Schon kleine Abweichungen gelten als eigener Punkt.
+function createDuplicateFilter() {
+  let seen = [];
   return {
-    accept(n, frame) {
-      let i = t.find(
-        (t) =>
-          t.frame >= frame - 1 &&
-          haversineDistance(t.lat, t.lon, n.lat, n.lon) <= e,
+    accept(point, frame) {
+      let same = seen.find(
+        (s) =>
+          s.frame >= frame - 1 && s.lat === point.lat && s.lon === point.lon,
       );
-      return i
-        ? ((i.frame = frame), false)
-        : (t.push({
-            lat: n.lat,
-            lon: n.lon,
-            frame: frame,
-          }),
-          true);
+      if (same) {
+        same.frame = frame;
+        return false;
+      }
+      seen.push({ lat: point.lat, lon: point.lon, frame });
+      return true;
     },
   };
 }

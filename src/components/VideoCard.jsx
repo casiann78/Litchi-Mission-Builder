@@ -32,7 +32,7 @@ function videoSummary(e, t) {
     `${e.done} von ${pluralize(e.total, "Bild", "Bildern")} gelesen`,
     pluralize(e.points, "Punkt", "Punkte"),
   ];
-  e.merged && n.push(`${e.merged} fast identische zusammengefasst`);
+  e.merged && n.push(`${e.merged} identische zusammengefasst`);
   e.fixed &&
     n.push(
       `${pluralize(e.fixed, "verlesene Ziffer", "verlesene Ziffern")} anhand der Nachbarbilder korrigiert`,
